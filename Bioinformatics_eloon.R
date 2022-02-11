@@ -1,4 +1,10 @@
-### Output files from Illumina Basespace
+### Create directories
+mkdir PROJname
+cd PROJname
+mkdir Library_1
+mkdir Library_2
+
+### Output files from Illumina Basespace and move to server 
 Library-1_S1_L001_R1_001.fastq.gz
 Library-1_S1_L001_R2_001.fastq.gz
 Library-2_S2_L001_R1_001.fastq.gz
@@ -16,12 +22,22 @@ Library-1_S1_L001_R2_001.fastq
 Library-2_S2_L001_R1_001.fastq
 Library-2_S2_L001_R2_001.fastq
 
-### Create screens for each library
+### Move output files to respective directories
+mv Library-1_S1_L001_R1_001.fastq Library_1
+mv Library-1_S1_L001_R2_001.fastq Library_1
+mv Library-2_S2_L001_R1_001.fastq Library_2
+mv Library-2_S2_L001_R2_001.fastq Library_2
+
+### Create screens for each library - Set path to respective library in each screen
 screen -S lib_1
 screen -S lib_2
 
+### Run OBITools
+obitools
+
 ### 0.5 Read quality check
-fastqc Library-1_S1_L001_R1_001.fastq Library-1_S1_L001_R2_001.fastq Library-2_S2_L001_R1_001.fastq Library-2_S2_L001_R2_001.fastq 
+fastqc Library-1_S1_L001_R1_001.fastq Library-1_S1_L001_R2_001.fastq 
+fastqc Library-2_S2_L001_R1_001.fastq Library-2_S2_L001_R2_001.fastq 
 
 ### 1. screen -r Library_1 - Paired-end alignment: merges R1 and R2, then splits in "Good" and "Bad" based on an alignment score cut-off of 40. (~9hrs)
 /home/els/SOFTWARE/OBITools-1.2.12/bin/illuminapairedend -r Library-1_S1_L001_R1_001.fastq Library-1_S1_L001_R2_001.fastq |
@@ -39,13 +55,6 @@ fastqc Library-1_S1_L001_R1_001.fastq Library-1_S1_L001_R2_001.fastq Library-2_S
 ### 2. screen -r Library_2  -  Demultiplexing (~3hr)
 /home/els/SOFTWARE/OBITools-1.2.12/bin/ngsfilter -t MM02_ngs_t.txt --fasta-output -u unidentified_MM02.fasta Good_MM02.fastq > MM02.filtered.fasta
 
-### Combine libraries (Don't do this)
-cat DEC2.filtered.fasta DEC2.filtered.fasta > DEC_1_2.filtered.fasta
-
-
-### /home/els/SOFTWARE/OBITools-1.2.12/bin/obicount filename.ext
-
-
 ### 3. screen -r Library_1 - Filter the seqs with length between 140 and 190 bp and remove seqs with 'N' (30mins)
 /home/els/SOFTWARE/OBITools-1.2.12/bin/obigrep -p 'seq_length>140' -p 'seq_length<190' -s '^[ACGT]+$' MM01.filtered.fasta > MM01.filtered_length.fasta
 
@@ -58,24 +67,26 @@ cat DEC2.filtered.fasta DEC2.filtered.fasta > DEC_1_2.filtered.fasta
 ### 4. screen -r Library_2 - Group the unique seqs (obiuniq) (30mins)
 /home/els/SOFTWARE/OBITools-1.2.12/bin/obiuniq -m sample MM02.filtered_length.fasta > MM02.unique.fasta
 
+-------------------------------
+
 ### 5. screen -r Library_1 - Exchange the identifier to a short index _(obiannotate)_
 /home/els/SOFTWARE/OBITools-1.2.12/bin/obiannotate --seq-rank MM01.unique.fasta | /home/els/SOFTWARE/OBITools-1.2.12/bin/obiannotate --set-identifier '"'MM01'_%09d" % seq_rank' > MM01.fasta
 
 ### 6. screen -r Library_1 - Change formats to vsearch (in Owenia)
 Rscript /extrastorage/home/elin/scripts/owi_scripts/owi_obifasta2vsearch -i MM01.fasta -o MM01.vsearch.fasta
 
-
 ###6.1 Editing vsearch.fasta
 vim MM01.vsearch.fasta
 
-# delete space between Motus name and ;
+# in vim - delete space between Motus name and ;
 :%s/ ;size=/;size=/g
 :wq
 
-
 ### 7. screen -r Library_1 - Run UCHIME de novo in VSEARCH (in Owenia)
 vsearch --uchime_denovo MM01.vsearch.fasta --sizeout --minh 0.90 --nonchimeras MM01.nonchimeras.fasta --chimeras MM01.chimeras.fasta --uchimeout MM01.uchimeout.txt
-------------------------
+
+------------------------------
+
 ### 5. screen -r Library_2 - Exchange the identifier to a short index _(obiannotate)_
 /home/els/SOFTWARE/OBITools-1.2.12/bin/obiannotate --seq-rank MM02.unique.fasta | /home/els/SOFTWARE/OBITools-1.2.12/bin/obiannotate --set-identifier '"'MM02'_%09d" % seq_rank' > MM02.fasta
 
@@ -85,87 +96,72 @@ Rscript /extrastorage/home/elin/scripts/owi_scripts/owi_obifasta2vsearch -i MM02
 ###6.1 Editing vsearch.fasta
 vim MM02.vsearch.fasta
 
-# delete space between Motus name and ;
+# in vim - delete space between Motus name and ;
 :%s/ ;size=/;size=/g
 :wq
 
 ### 7. screen -r Library_2 - Run UCHIME de novo in VSEARCH (in Owenia)
 vsearch --uchime_denovo MM02.vsearch.fasta --sizeout --minh 0.90 --nonchimeras MM02.nonchimeras.fasta --chimeras MM02.chimeras.fasta --uchimeout MM02.uchimeout.txt
 
-### 8. screen -r Library_1 - Clustering using SWARM
-swarm -d 1 -z -t 10 -o MM01_d3_SWARM3nc_output -s MM01_d1_SWARM3nc_stats -w MM01_d1_SWARM3nc_seeds.fasta MM01.nonchimeras.fasta
+-------------------------------
 
----- Command 'swarm' not found, but can be installed with:
+### 8. screen -r Library_1 - Clustering using SWARM -d 1
+/home/els/SOFTWARE/swarm/bin/swarm -d 1 -z -t 10 -o MM01_d1_SWARM3nc_output -s MM01_d1_SWARM3nc_stats -w MM01_d1_SWARM3nc_seeds.fasta MM01.nonchimeras.fasta
 
----- apt install swarm
----- Please ask your administrator.
+### 8. screen -r Library_2 - Clustering using SWARM -d 1
+/home/els/SOFTWARE/swarm/bin/swarm -d 1 -z -t 10 -o MM02_d1_SWARM3nc_output -s MM02_d1_SWARM3nc_stats -w MM02_d1_SWARM3nc_seeds.fasta MM02.nonchimeras.fasta
 
-### Resolved using the path
-/home/els/SOFTWARE/swarm/bin/swarm -d 1 -z -t 10 -o MM01_d3_SWARM3nc_output -s MM01_d1_SWARM3nc_stats -w MM01_d1_SWARM3nc_seeds.fasta MM01.nonchimeras.fasta
-
-### 8. screen -r Library_2 - Clustering using SWARM
-/home/els/SOFTWARE/swarm/bin/swarm -d 1 -z -t 10 -o MM02_d3_SWARM3nc_output -s MM02_d1_SWARM3nc_stats -w MM02_d1_SWARM3nc_seeds.fasta MM02.nonchimeras.fasta
-
-### 9. screen -r Library_1 - Get the tab file
+### 9. screen -r Library_1 - Create the tab file
 /home/els/SOFTWARE/OBITools-1.2.12/bin/obitab -o MM01.fasta >  MM01.new.tab
 
-### 9. screen -r Library_2 - Get the tab file
+### 9. screen -r Library_2 - Create the tab file
 /home/els/SOFTWARE/OBITools-1.2.12/bin/obitab -o MM02.fasta >  MM02.new.tab
 
-
 ### 10. Taxonomic assignment _(ecotag)
-
 
 ##### 10.1 screen -r Library_1 - Recount after SWARM
 Rscript /extrastorage/home/elin/scripts/owi_scripts/owi_recount_swarm MM01_d1_SWARM3nc_output MM01.new.tab
 
-
 ##### 10.1 screen -r Library_2 - Recount after SWARM
 Rscript /extrastorage/home/elin/scripts/owi_scripts/owi_recount_swarm MM02_d1_SWARM3nc_output MM02.new.tab
 
-##### 10.2. Select only non singleton MOTUs - Open  YOURFILE_SWARM3nc_seeds.fasta in vim. Add a space in every header by changing “;size=” by “; size=”.
+##### 10.2. Select only non singleton MOTUs - Opens YOURFILE_SWARM3nc_seeds.fasta in vim. Adds a space in every header by changing “;size=” by “; size=”.
 
+# screen -r Library_1
 vim  MM01_d1_SWARM3nc_seeds.fasta
 :%s/;size=/; size=/g
 :wq
  
-### 10.2 screen -r Library_1
-vim  MM01_d1_SWARM3nc_seeds.fasta
-
-########## command in vim - :%s/size/ size/g
-
 ### 10.2 screen -r Library_2
 vim  MM02_d1_SWARM3nc_seeds.fasta
 :%s/;size=/; size=/g
 :wq
 
-###### 10.2 screen -r Library_1 Select only non singletons
+###### 11 screen -r Library_1 Select only non singletons (obigrep)
 /home/els/SOFTWARE/OBITools-1.2.12/bin/obigrep -p 'size>1' MM01_d1_SWARM3nc_seeds.fasta > MM01_d1_seeds_nonsingletons.fasta
 
-##### 10.3. screen -r Library_1 - Annotate with ecotag
+##### 12 screen -r Library_1 - Annotate with ecotag
 /home/els/SOFTWARE/OBITools-1.2.12/bin/ecotag -d /home/naiara/extrastorage/eDNA/eDNA_bioinformatics/Taxo_May2018/Eukarya -R /home/naiara/extrastorage/eDNA/eDNA_bioinformatics/Taxo_2020/db_Eukarya_Nov_20.fasta MM01_d1_seeds_nonsingletons.fasta > MM01_d1_ecotag.fasta
 
-###### 10. 2screen -r Library_2 - Select only non singletons
+###### 11 screen -r Library_2 - Select only non singletons (obigrep)
 /home/els/SOFTWARE/OBITools-1.2.12/bin/obigrep -p 'size>1' MM02_d1_SWARM3nc_seeds.fasta > MM02_d1_seeds_nonsingletons.fasta
 
-##### 10.3. screen -r Library_2 - Annotate with ecotag
+##### 12 screen -r Library_2 - Annotate with ecotag
 /home/els/SOFTWARE/OBITools-1.2.12/bin/ecotag -d /home/naiara/extrastorage/eDNA/eDNA_bioinformatics/Taxo_May2018/Eukarya -R /home/naiara/extrastorage/eDNA/eDNA_bioinformatics/Taxo_2020/db_Eukarya_Nov_20.fasta MM02_d1_seeds_nonsingletons.fasta > MM02_d1_ecotag.fasta
 
-### 11. screen -r Library_1 Add high level taxa 
+### 13 screen -r Library_1 Add high level taxa 
 Rscript /extrastorage/home/elin/scripts/owi_scripts/owi_add_taxonomy MM01_d1_ecotag.fasta
 
-### 12. screen -r Library_1 Combine Ecotag and abundance files
+### 14 screen -r Library_1 Combine Ecotag and abundance files
 Rscript /extrastorage/home/elin/scripts/owi_scripts/owi_combine -i MM01_d1_ecotag.fasta.annotated.csv -a MM01_d1_SWARM3nc_output.counts.csv -o MM01_d1_MOTUs.csv
 
-### 11. screen -r Library_2 - Add high level taxa 
+### 13 screen -r Library_2 - Add high level taxa 
 Rscript /extrastorage/home/elin/scripts/owi_scripts/owi_add_taxonomy MM02_d1_ecotag.fasta
 
-### 12. screen -r Library_2 - Combine Ecotag and abundance files
-script /extrastorage/home/elin/scripts/owi_scripts/owi_combine -i MM02_d1_ecotag.fasta.annotated.csv -a MM02_d1_SWARM3nc_output.counts.csv -o MM02_d1_MOTUs.csv
+### 14 screen -r Library_2 - Combine Ecotag and abundance files
+Rscript /extrastorage/home/elin/scripts/owi_scripts/owi_combine -i MM02_d1_ecotag.fasta.annotated.csv -a MM02_d1_SWARM3nc_output.counts.csv -o MM02_d1_MOTUs.csv
 
 
-
-
-
+# Now time to filter in R :)
 
 
