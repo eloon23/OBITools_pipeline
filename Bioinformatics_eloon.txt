@@ -164,7 +164,7 @@ Rscript /extrastorage/home/elin/scripts/owi_scripts/owi_add_taxonomy MM02_d1_eco
 script /extrastorage/home/elin/scripts/owi_scripts/owi_combine -i MM02_d1_ecotag.fasta.annotated.csv -a MM02_d1_SWARM3nc_output.counts.csv -o MM02_d1_MOTUs.csv
 
 
-
+### test change
 
 
 
